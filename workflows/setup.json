@@ -1,0 +1,104 @@
+{
+  "id": "rssDigestSetup01",
+  "name": "RSS Digest — создать таблицы (запустить 1 раз)",
+  "nodes": [
+    {
+      "id": "cd0068bb-edaf-542f-a116-a52d1f4b7d55",
+      "name": "Run once",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "5e417e45-9655-5199-a6dd-6ea824907f6e",
+      "name": "Create rss_sources",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        220,
+        300
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "rss_sources",
+        "columns": {
+          "column": [
+            {
+              "name": "url",
+              "type": "string"
+            },
+            {
+              "name": "title",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    },
+    {
+      "id": "d9bb8b16-be19-5d37-a8a2-2cb082a51965",
+      "name": "Create rss_seen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ],
+      "executeOnce": true,
+      "parameters": {
+        "resource": "table",
+        "operation": "create",
+        "tableName": "rss_seen",
+        "columns": {
+          "column": [
+            {
+              "name": "link",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {
+          "createIfNotExists": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Run once": {
+      "main": [
+        [
+          {
+            "node": "Create rss_sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create rss_sources": {
+      "main": [
+        [
+          {
+            "node": "Create rss_seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

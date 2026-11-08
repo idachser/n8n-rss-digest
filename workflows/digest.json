@@ -1,0 +1,595 @@
+{
+  "id": "rssDigestDaily01",
+  "name": "RSS Digest — ежедневный дайджест",
+  "nodes": [
+    {
+      "id": "9be1866b-4fdb-558f-a57b-a9c095590837",
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f6d1377c-1d81-5aff-a19f-c311fb9f8533",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [{\n  json: {\n    // Куда слать дайджест: ваш Telegram id (личка с ботом), @канал или -100... (бот — админ канала)\n    chatId: '135656943',\n    // Сюда приходят сообщения о сломанных лентах; '' — не отправлять\n    adminChatId: '',\n    digestTitle: 'Дайджест новостей',\n    lookbackHours: 26,\n    maxItemsPerSource: 20,\n    maxItemsTotal: 150,\n    topN: 10,\n    // 'gemini' или 'claude'\n    provider: 'gemini',\n    geminiModel: 'gemini-3.6-flash',\n    claudeModel: 'claude-opus-5-5',\n    claudeEffort: 'medium',\n    seenRetentionDays: 30,\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "b179863e-e43f-5420-a361-622311f9309e",
+      "name": "Get sources",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "rss_sources"
+        },
+        "returnAll": true
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "08e9edf6-77fc-5a38-a441-347700dd5eb3",
+      "name": "Prepare sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.url)\n  .sort((a, b) => a.id - b.id)\n  .map((r) => ({ json: { url: r.url, title: r.title || r.url } }));\n"
+      }
+    },
+    {
+      "id": "692b93cd-834b-5cfc-af26-3ab390604cc7",
+      "name": "Read feeds",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        300
+      ],
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "c426cac4-1b7e-500b-a944-bc69451eb108",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst since = Date.now() - cfg.lookbackHours * 3600 * 1000;\n\nconst ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '\"', apos: \"'\", nbsp: ' ', laquo: '«', raquo: '»', mdash: '—', ndash: '–', hellip: '…' };\nconst clean = (s) => String(s || '')\n  .replace(/<[^>]*>/g, ' ')\n  .replace(/&(#x[0-9a-f]+|#\\d+|\\w+);/gi, (all, e) => {\n    if (e[0] === '#') {\n      const code = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);\n      return code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;\n    }\n    return ENTITIES[e.toLowerCase()] ?? all;\n  })\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nconst failed = new Set();\nconst bySource = new Map();\nconst seenLinks = new Set();\n\n$input.all().forEach((item, idx) => {\n  let src = {};\n  try {\n    src = $('Prepare sources').itemMatching(idx).json;\n  } catch (e) {}\n  const j = item.json;\n  if (j.error) {\n    failed.add(src.url || '?');\n    return;\n  }\n  const link = String(j.link || j.guid || '').trim();\n  const title = clean(j.title);\n  if (!/^https?:\\/\\//i.test(link) || !title || seenLinks.has(link)) return;\n\n  const ts = Date.parse(j.isoDate || j.pubDate || '');\n  if (!Number.isNaN(ts) && ts < since) return;\n  seenLinks.add(link);\n\n  const key = src.url || '?';\n  if (!bySource.has(key)) bySource.set(key, []);\n  bySource.get(key).push({\n    link,\n    title: title.slice(0, 300),\n    snippet: clean(j.contentSnippet || j.content || j.summary).slice(0, 400),\n    source: src.title || key,\n    feed: key,\n    ts: Number.isNaN(ts) ? null : ts,\n  });\n});\n\nreturn [{ json: { items: [...bySource.values()].flat(), failed: [...failed] } }];\n"
+      }
+    },
+    {
+      "id": "d2ac813b-2214-5f2e-a6be-8f53d8e738fa",
+      "name": "Get seen links",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "rss_seen"
+        },
+        "returnAll": true
+      },
+      "alwaysOutputData": true,
+      "executeOnce": true
+    },
+    {
+      "id": "22558197-5217-57bd-a8d2-b69cada161bb",
+      "name": "Filter new",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst { items } = $('Normalize').first().json;\nconst seen = new Set($input.all().map((i) => i.json.link).filter(Boolean));\n\nconst newest = (a, b) => (b.ts ?? 0) - (a.ts ?? 0);\nconst perSource = new Map();\nfor (const it of items) {\n  if (seen.has(it.link)) continue;\n  if (!perSource.has(it.feed)) perSource.set(it.feed, []);\n  perSource.get(it.feed).push(it);\n}\n\nconst candidates = [...perSource.values()]\n  .flatMap((list) => list.sort(newest).slice(0, cfg.maxItemsPerSource))\n  .sort(newest)\n  .slice(0, cfg.maxItemsTotal);\n\nif (candidates.length === 0) return [];\nreturn [{ json: { candidates } }];\n"
+      }
+    },
+    {
+      "id": "97266ead-7692-52cb-aa13-74478c54429d",
+      "name": "Build request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst { candidates } = $input.first().json;\n\nconst fmtDate = (ts) => (ts ? new Date(ts).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : 'без даты');\nconst list = candidates\n  .map((c, i) => `[${i + 1}] ${c.source} · ${fmtDate(c.ts)}\\n${c.title}${c.snippet ? `\\n${c.snippet}` : ''}`)\n  .join('\\n\\n');\n\nconst system = [\n  'Ты — редактор новостного Telegram-канала. Из списка свежих публикаций СМИ ты собираешь короткий дайджест самого важного.',\n  '',\n  'Как отбирать:',\n  '- Значимость: последствия для многих людей, экономики, политики, технологий, науки; новые факты, а не мнения и пересказы.',\n  '- Одна и та же история в нескольких источниках — один пункт; возьми самую информативную публикацию. Освещение в нескольких СМИ — признак значимости.',\n  '- Не бери рекламу, гороскопы, развлекательную мелочь, анонсы без содержания, кликбейт.',\n  `- Не больше ${cfg.topN} пунктов; если значимого меньше — меньше. Порядок — от самого важного.`,\n  '',\n  'Как писать (по-русски, независимо от языка источника):',\n  '- title: короткий информативный заголовок своими словами, без кавычек-ёлочек вокруг всего заголовка и без эмодзи.',\n  '- summary: 1–2 предложения — суть и почему это важно. Только факты из публикации, ничего не додумывай.',\n  '- intro: одно предложение об общей картине дня.',\n  '- id: номер публикации из списка в квадратных скобках.',\n].join('\\n');\n\nconst schema = {\n  type: 'object',\n  properties: {\n    intro: { type: 'string' },\n    items: {\n      type: 'array',\n      items: {\n        type: 'object',\n        properties: {\n          id: { type: 'integer' },\n          title: { type: 'string' },\n          summary: { type: 'string' },\n        },\n        required: ['id', 'title', 'summary'],\n        additionalProperties: false,\n      },\n    },\n  },\n  required: ['intro', 'items'],\n  additionalProperties: false,\n};\n\nconst user = `Публикации (${candidates.length}):\\n\\n${list}`;\n\nif (cfg.provider === 'gemini') {\n  const { additionalProperties, ...itemSchema } = schema.properties.items.items;\n  const geminiSchema = {\n    type: 'object',\n    properties: { ...schema.properties, items: { type: 'array', items: itemSchema } },\n    required: schema.required,\n  };\n  return [{\n    json: {\n      provider: 'gemini',\n      body: {\n        systemInstruction: { parts: [{ text: system }] },\n        contents: [{ role: 'user', parts: [{ text: user }] }],\n        generationConfig: {\n          responseMimeType: 'application/json',\n          responseJsonSchema: geminiSchema,\n          maxOutputTokens: 16000,\n        },\n      },\n    },\n  }];\n}\n\nreturn [{\n  json: {\n    provider: 'claude',\n    body: {\n      model: cfg.claudeModel,\n      max_tokens: 16000,\n      output_config: { effort: cfg.claudeEffort, format: { type: 'json_schema', schema } },\n      fallbacks: 'default',\n      system,\n      messages: [{ role: 'user', content: user }],\n    },\n  },\n}];\n"
+      }
+    },
+    {
+      "id": "216f7c50-fb01-5403-ac75-727d860cad0e",
+      "name": "Provider",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1980,
+        300
+      ],
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 2,
+        "output": "={{ $json.provider === 'gemini' ? 1 : 0 }}"
+      }
+    },
+    {
+      "id": "da2f8115-f27d-5602-a971-a6da01643fcf",
+      "name": "Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2026-10-21"
+            },
+            {
+              "name": "anthropic-beta",
+              "value": "server-side-fallback-2026-07-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "anthropic-key",
+          "name": "Anthropic API key"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000
+    },
+    {
+      "id": "63239eef-eebb-5ec2-a0ff-dbb72f4947b0",
+      "name": "Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiModel }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 600000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gemini-key",
+          "name": "Gemini API key"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 30000
+    },
+    {
+      "id": "63c19c86-6a5b-5925-a58f-862dabaa3349",
+      "name": "Format posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst { candidates } = $('Filter new').first().json;\nconst res = $input.first().json;\n\nfunction claudeText(r) {\n  if (r.stop_reason === 'refusal') {\n    throw new Error(`Claude отказался отвечать: ${JSON.stringify(r.stop_details)}`);\n  }\n  if (r.stop_reason === 'max_tokens') throw new Error('Ответ Claude обрезан по max_tokens');\n  return (r.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');\n}\n\nfunction geminiText(r) {\n  const cand = (r.candidates || [])[0];\n  if (!cand) {\n    throw new Error(`Gemini не вернул ответ: ${JSON.stringify(r.promptFeedback || r).slice(0, 500)}`);\n  }\n  if (cand.finishReason && cand.finishReason !== 'STOP') {\n    throw new Error(`Gemini остановился с finishReason=${cand.finishReason}`);\n  }\n  return (cand.content?.parts || []).filter((p) => !p.thought && p.text).map((p) => p.text).join('');\n}\n\nconst text = cfg.provider === 'gemini' ? geminiText(res) : claudeText(res);\nlet data;\ntry {\n  data = JSON.parse(text);\n} catch (e) {\n  throw new Error(`Модель вернула не JSON: ${text.slice(0, 500)}`);\n}\n\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst escAttr = (s) => esc(s).replace(/\"/g, '&quot;');\n\nconst used = new Set();\nconst picks = [];\nfor (const it of data.items || []) {\n  const c = candidates[it.id - 1];\n  if (!c || used.has(it.id)) continue;\n  used.add(it.id);\n  picks.push({ ...it, c });\n  if (picks.length >= cfg.topN) break;\n}\nif (picks.length === 0) return [];\n\nconst date = $now.setLocale('ru').toFormat('d MMMM yyyy');\nconst blocks = [\n  `<b>📰 ${esc(cfg.digestTitle)} — ${esc(date)}</b>`,\n  ...(data.intro ? [`<i>${esc(data.intro)}</i>`] : []),\n  ...picks.map((p, i) =>\n    `${i + 1}. <b>${esc(p.title)}</b>\\n${esc(p.summary)}\\n<a href=\"${escAttr(p.c.link)}\">${esc(p.c.source)}</a>`),\n];\n\nconst LIMIT = 4000;\nconst posts = [];\nlet cur = '';\nfor (const block of blocks) {\n  if (cur && cur.length + 2 + block.length > LIMIT) {\n    posts.push(cur);\n    cur = block;\n  } else {\n    cur = cur ? `${cur}\\n\\n${block}` : block;\n  }\n}\nif (cur) posts.push(cur);\n\nreturn posts.map((text) => ({ json: { chatId: cfg.chatId, text } }));\n"
+      }
+    },
+    {
+      "id": "1d9fddeb-69eb-5814-aa1c-a7f32c7ac837",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2640,
+        300
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "Telegram RSS bot"
+        }
+      }
+    },
+    {
+      "id": "dffd343a-709d-53b3-a2b3-7ea0527d31c0",
+      "name": "Admin notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        520
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst { failed } = $input.first().json;\nif (!cfg.adminChatId || failed.length === 0) return [];\nreturn [{ json: { chatId: cfg.adminChatId, text: `⚠️ Не удалось прочитать ленты:\\n${failed.join('\\n')}` } }];\n"
+      }
+    },
+    {
+      "id": "5f60503a-bd0d-5ac4-a9d1-cb849ac9ece2",
+      "name": "Notify admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        520
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "telegram-bot",
+          "name": "Telegram RSS bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "5aff5e9b-da21-5aa0-aa4e-ebdfa9d16e03",
+      "name": "Mark seen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return $('Filter new').first().json.candidates.map((c) => ({ json: { link: c.link } }));\n"
+      }
+    },
+    {
+      "id": "1c1e1f27-00b4-5d25-ad3b-1acb87bb8540",
+      "name": "Save seen links",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3080,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "insert",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "rss_seen"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "f9e8cacd-34c3-55ef-acde-a2464389868d",
+      "name": "Prune old seen",
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        3300,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "deleteRows",
+        "dataTableId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "rss_seen"
+        },
+        "matchType": "allConditions",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "createdAt",
+              "condition": "lt",
+              "keyValue": "={{ $now.minus({ days: $('Config').first().json.seenRetentionDays }).toISO() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "executeOnce": true
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get sources": {
+      "main": [
+        [
+          {
+            "node": "Prepare sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare sources": {
+      "main": [
+        [
+          {
+            "node": "Read feeds",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read feeds": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Get seen links",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Admin notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Admin notice": {
+      "main": [
+        [
+          {
+            "node": "Notify admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get seen links": {
+      "main": [
+        [
+          {
+            "node": "Filter new",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter new": {
+      "main": [
+        [
+          {
+            "node": "Build request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build request": {
+      "main": [
+        [
+          {
+            "node": "Provider",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Provider": {
+      "main": [
+        [
+          {
+            "node": "Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude": {
+      "main": [
+        [
+          {
+            "node": "Format posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "main": [
+        [
+          {
+            "node": "Format posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format posts": {
+      "main": [
+        [
+          {
+            "node": "Send to Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Telegram": {
+      "main": [
+        [
+          {
+            "node": "Mark seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark seen": {
+      "main": [
+        [
+          {
+            "node": "Save seen links",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save seen links": {
+      "main": [
+        [
+          {
+            "node": "Prune old seen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "active": false
+}

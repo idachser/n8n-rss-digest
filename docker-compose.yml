@@ -1,0 +1,18 @@
+services:
+  n8n:
+    image: n8nio/n8n:2.46.6
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - GENERIC_TIMEZONE=${TZ:-Europe/Moscow}
+      - TZ=${TZ:-Europe/Moscow}
+      # Публичный HTTPS-адрес n8n: без него Telegram не сможет доставлять команды боту
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - N8N_PROXY_HOPS=1
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+
+volumes:
+  n8n_data:
