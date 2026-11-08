@@ -11,6 +11,6 @@ const target = /^\d+$/.test(arg)
   : rows.find((r) => norm(r.url) === norm(arg));
 
 if (!target) {
-  return [{ json: { found: false, chatId, text: `Источник «${arg}» не найден. Смотрите /list` } }];
+  return [{ json: { found: false, chatId, text: `Quelle „${arg}“ nicht gefunden. Siehe /list` } }];
 }
 return [{ json: { found: true, chatId, url: target.url, title: target.title || target.url } }];

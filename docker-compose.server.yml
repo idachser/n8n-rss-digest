@@ -1,0 +1,31 @@
+# Server overlay: docker compose -f docker-compose.yml -f docker-compose.server.yml up -d
+services:
+  n8n:
+    # Only Caddy can reach n8n; port 5678 must not be open to the internet.
+    ports: !reset []
+    environment:
+      - GENERIC_TIMEZONE=${TZ:-Europe/Berlin}
+      - TZ=${TZ:-Europe/Berlin}
+      - WEBHOOK_URL=https://${N8N_DOMAIN:?set N8N_DOMAIN in .env}/
+      - N8N_HOST=${N8N_DOMAIN}
+      - N8N_PROTOCOL=https
+      - N8N_PROXY_HOPS=1
+
+  caddy:
+    image: caddy:2.11.9
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - N8N_DOMAIN=${N8N_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - n8n
+
+volumes:
+  caddy_data:
+  caddy_config:

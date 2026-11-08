@@ -1,3 +1,5 @@
+name: n8n-rss-digest
+
 services:
   n8n:
     image: n8nio/n8n:2.46.6
@@ -5,14 +7,23 @@ services:
     ports:
       - "5678:5678"
     environment:
-      - GENERIC_TIMEZONE=${TZ:-Europe/Moscow}
-      - TZ=${TZ:-Europe/Moscow}
-      # Публичный HTTPS-адрес n8n: без него Telegram не сможет доставлять команды боту
-      - WEBHOOK_URL=${WEBHOOK_URL}
+      - GENERIC_TIMEZONE=${TZ:-Europe/Berlin}
+      - TZ=${TZ:-Europe/Berlin}
+      # Öffentliche HTTPS-Adresse von n8n: ohne sie kann Telegram dem Bot keine Befehle zustellen
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
       - N8N_PROXY_HOPS=1
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/workflows:ro
+
+  # Only for running locally. The Quick Tunnel URL changes on every restart; run scripts/tunnel.sh to re-sync WEBHOOK_URL.
+  tunnel:
+    image: cloudflare/cloudflared:2026.10.7
+    profiles: [tunnel]
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://n8n:5678
+    depends_on:
+      - n8n
 
 volumes:
   n8n_data:

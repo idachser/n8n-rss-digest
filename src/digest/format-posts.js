@@ -4,19 +4,19 @@ const res = $input.first().json;
 
 function claudeText(r) {
   if (r.stop_reason === 'refusal') {
-    throw new Error(`Claude отказался отвечать: ${JSON.stringify(r.stop_details)}`);
+    throw new Error(`Claude hat die Antwort verweigert: ${JSON.stringify(r.stop_details)}`);
   }
-  if (r.stop_reason === 'max_tokens') throw new Error('Ответ Claude обрезан по max_tokens');
+  if (r.stop_reason === 'max_tokens') throw new Error('Antwort von Claude wurde bei max_tokens abgeschnitten');
   return (r.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
 }
 
 function geminiText(r) {
   const cand = (r.candidates || [])[0];
   if (!cand) {
-    throw new Error(`Gemini не вернул ответ: ${JSON.stringify(r.promptFeedback || r).slice(0, 500)}`);
+    throw new Error(`Gemini hat keine Antwort geliefert: ${JSON.stringify(r.promptFeedback || r).slice(0, 500)}`);
   }
   if (cand.finishReason && cand.finishReason !== 'STOP') {
-    throw new Error(`Gemini остановился с finishReason=${cand.finishReason}`);
+    throw new Error(`Gemini hat mit finishReason=${cand.finishReason} abgebrochen`);
   }
   return (cand.content?.parts || []).filter((p) => !p.thought && p.text).map((p) => p.text).join('');
 }
@@ -26,7 +26,7 @@ let data;
 try {
   data = JSON.parse(text);
 } catch (e) {
-  throw new Error(`Модель вернула не JSON: ${text.slice(0, 500)}`);
+  throw new Error(`Das Modell hat kein JSON geliefert: ${text.slice(0, 500)}`);
 }
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -43,7 +43,7 @@ for (const it of data.items || []) {
 }
 if (picks.length === 0) return [];
 
-const date = $now.setLocale('ru').toFormat('d MMMM yyyy');
+const date = $now.setLocale('de').toFormat('d. MMMM yyyy');
 const blocks = [
   `<b>📰 ${esc(cfg.digestTitle)} — ${esc(date)}</b>`,
   ...(data.intro ? [`<i>${esc(data.intro)}</i>`] : []),

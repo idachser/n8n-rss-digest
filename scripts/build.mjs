@@ -156,7 +156,7 @@ const llmRequest = (name, position, url, headers, credential) => ({
   waitBetweenTries: 30000,
 });
 
-const bot = workflow('rssDigestBot0001', 'RSS Digest — бот управления источниками', [
+const bot = workflow('rssDigestBot0001', 'RSS Digest — Bot zur Quellenverwaltung', [
   {
     name: 'Telegram Trigger',
     type: 'n8n-nodes-base.telegramTrigger',
@@ -224,7 +224,7 @@ const bot = workflow('rssDigestBot0001', 'RSS Digest — бот управлен
   ['Format list', 'Reply'],
 ]);
 
-const digest = workflow('rssDigestDaily01', 'RSS Digest — ежедневный дайджест', [
+const digest = workflow('rssDigestDaily01', 'RSS Digest — täglicher Digest', [
   {
     name: 'Schedule',
     type: 'n8n-nodes-base.scheduleTrigger',
@@ -305,7 +305,7 @@ const createTable = (name, tableName, columns, position) => ({
   },
 });
 
-const setup = workflow('rssDigestSetup01', 'RSS Digest — создать таблицы (запустить 1 раз)', [
+const setup = workflow('rssDigestSetup01', 'RSS Digest — Tabellen anlegen (einmal ausführen)', [
   {
     name: 'Run once',
     type: 'n8n-nodes-base.manualTrigger',

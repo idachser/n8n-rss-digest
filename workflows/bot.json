@@ -1,6 +1,6 @@
 {
   "id": "rssDigestBot0001",
-  "name": "RSS Digest — бот управления источниками",
+  "name": "RSS Digest — Bot zur Quellenverwaltung",
   "nodes": [
     {
       "id": "229c918e-2f9a-5232-a787-631a6542c03b",
@@ -37,7 +37,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const msg = $input.first().json.message;\nif (!msg || !msg.chat) return [];\n\nconst chatId = msg.chat.id;\nconst raw = (msg.text || '').trim();\nconst m = raw.match(/^\\/(\\w+)(?:@\\S+)?\\s*([\\s\\S]*)$/);\nlet cmd = m ? m[1].toLowerCase() : '';\nconst arg = (m ? m[2] : raw).trim();\nif (!m && /^https?:\\/\\//i.test(raw)) cmd = 'add';\n\nconst HELP = [\n  'RSS-дайджест. Команды:',\n  '/add <url> — добавить RSS/Atom-ленту (можно просто прислать ссылку)',\n  '/list — список источников',\n  '/remove <номер или url> — удалить источник',\n].join('\\n');\n\nif (cmd === 'add') {\n  const url = arg.split(/\\s+/)[0] || '';\n  if (!/^https?:\\/\\/\\S+\\.\\S+/i.test(url)) {\n    return [{ json: { route: 3, chatId, text: 'Укажите адрес ленты: /add https://example.com/rss' } }];\n  }\n  return [{ json: { route: 0, chatId, url } }];\n}\nif (['remove', 'rm', 'del', 'delete'].includes(cmd)) {\n  if (!arg) return [{ json: { route: 3, chatId, text: 'Укажите номер из /list или url: /remove 2' } }];\n  return [{ json: { route: 1, chatId, arg } }];\n}\nif (cmd === 'list') return [{ json: { route: 2, chatId } }];\n\nreturn [{ json: { route: 3, chatId, text: HELP } }];\n"
+        "jsCode": "const msg = $input.first().json.message;\nif (!msg || !msg.chat) return [];\n\nconst chatId = msg.chat.id;\nconst raw = (msg.text || '').trim();\nconst m = raw.match(/^\\/(\\w+)(?:@\\S+)?\\s*([\\s\\S]*)$/);\nlet cmd = m ? m[1].toLowerCase() : '';\nconst arg = (m ? m[2] : raw).trim();\nif (!m && /^https?:\\/\\//i.test(raw)) cmd = 'add';\n\nconst HELP = [\n  'RSS-Digest. Befehle:',\n  '/add <url> — RSS/Atom-Feed hinzufügen (oder einfach den Link schicken)',\n  '/list — Liste der Quellen',\n  '/remove <Nummer oder URL> — Quelle entfernen',\n].join('\\n');\n\nif (cmd === 'add') {\n  const url = arg.split(/\\s+/)[0] || '';\n  if (!/^https?:\\/\\/\\S+\\.\\S+/i.test(url)) {\n    return [{ json: { route: 3, chatId, text: 'Bitte die Feed-Adresse angeben: /add https://example.com/rss' } }];\n  }\n  return [{ json: { route: 0, chatId, url } }];\n}\nif (['remove', 'rm', 'del', 'delete'].includes(cmd)) {\n  if (!arg) return [{ json: { route: 3, chatId, text: 'Bitte eine Nummer aus /list oder eine URL angeben: /remove 2' } }];\n  return [{ json: { route: 1, chatId, arg } }];\n}\nif (cmd === 'list') return [{ json: { route: 2, chatId } }];\n\nreturn [{ json: { route: 3, chatId, text: HELP } }];\n"
       }
     },
     {
@@ -86,7 +86,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const { chatId, url } = $('Parse command').first().json;\n// Only scheme and host are case-insensitive; paths and queries are not.\nconst norm = (u) => String(u).trim().replace(/\\/+$/, '').replace(/^[a-z]+:\\/\\/[^/?#]+/i, (h) => h.toLowerCase());\nconst duplicate = $input.all().some((i) => i.json.url && norm(i.json.url) === norm(url));\n\nreturn [{\n  json: {\n    chatId,\n    url,\n    duplicate,\n    text: duplicate ? `Этот источник уже в списке: ${url}` : '',\n  },\n}];\n"
+        "jsCode": "const { chatId, url } = $('Parse command').first().json;\n// Only scheme and host are case-insensitive; paths and queries are not.\nconst norm = (u) => String(u).trim().replace(/\\/+$/, '').replace(/^[a-z]+:\\/\\/[^/?#]+/i, (h) => h.toLowerCase());\nconst duplicate = $input.all().some((i) => i.json.url && norm(i.json.url) === norm(url));\n\nreturn [{\n  json: {\n    chatId,\n    url,\n    duplicate,\n    text: duplicate ? `Diese Quelle ist bereits in der Liste: ${url}` : '',\n  },\n}];\n"
       }
     },
     {
@@ -150,7 +150,7 @@
         100
       ],
       "parameters": {
-        "jsCode": "const { chatId, url } = $('Check duplicate').first().json;\nconst items = $input.all().map((i) => i.json);\nconst entries = items.filter((j) => j.title || j.link);\n\nif (entries.length === 0) {\n  const reason = items.find((j) => j.error)?.error || 'в ленте нет записей или это не RSS/Atom';\n  return [{ json: { ok: false, chatId, text: `Не удалось прочитать ленту ${url}\\n${reason}` } }];\n}\n\n// The Code node sandbox has no global URL constructor.\nconst title = (url.match(/^https?:\\/\\/(?:www\\.|rss\\.|feeds?\\.)?([^/:?#]+)/i) || [])[1] || url;\n\nreturn [{ json: { ok: true, chatId, url, title, count: entries.length } }];\n"
+        "jsCode": "const { chatId, url } = $('Check duplicate').first().json;\nconst items = $input.all().map((i) => i.json);\nconst entries = items.filter((j) => j.title || j.link);\n\nif (entries.length === 0) {\n  const reason = items.find((j) => j.error)?.error || 'der Feed hat keine Einträge oder ist kein RSS/Atom';\n  return [{ json: { ok: false, chatId, text: `Feed konnte nicht gelesen werden: ${url}\\n${reason}` } }];\n}\n\n// The Code node sandbox has no global URL constructor.\nconst title = (url.match(/^https?:\\/\\/(?:www\\.|rss\\.|feeds?\\.)?([^/:?#]+)/i) || [])[1] || url;\n\nreturn [{ json: { ok: true, chatId, url, title, count: entries.length } }];\n"
       }
     },
     {
@@ -237,7 +237,7 @@
         0
       ],
       "parameters": {
-        "jsCode": "const { chatId, url, title, count } = $('Check feed').first().json;\nreturn [{\n  json: {\n    chatId,\n    text: `Добавлено: ${title}\\n${url}\\nЗаписей в ленте сейчас: ${count}`,\n  },\n}];\n"
+        "jsCode": "const { chatId, url, title, count } = $('Check feed').first().json;\nreturn [{\n  json: {\n    chatId,\n    text: `Hinzugefügt: ${title}\\n${url}\\nAktuelle Einträge im Feed: ${count}`,\n  },\n}];\n"
       }
     },
     {
@@ -271,7 +271,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const { chatId, arg } = $('Parse command').first().json;\n// Only scheme and host are case-insensitive; paths and queries are not.\nconst norm = (u) => String(u).trim().replace(/\\/+$/, '').replace(/^[a-z]+:\\/\\/[^/?#]+/i, (h) => h.toLowerCase());\nconst rows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.url)\n  .sort((a, b) => a.id - b.id);\n\nconst target = /^\\d+$/.test(arg)\n  ? rows[Number(arg) - 1]\n  : rows.find((r) => norm(r.url) === norm(arg));\n\nif (!target) {\n  return [{ json: { found: false, chatId, text: `Источник «${arg}» не найден. Смотрите /list` } }];\n}\nreturn [{ json: { found: true, chatId, url: target.url, title: target.title || target.url } }];\n"
+        "jsCode": "const { chatId, arg } = $('Parse command').first().json;\n// Only scheme and host are case-insensitive; paths and queries are not.\nconst norm = (u) => String(u).trim().replace(/\\/+$/, '').replace(/^[a-z]+:\\/\\/[^/?#]+/i, (h) => h.toLowerCase());\nconst rows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.url)\n  .sort((a, b) => a.id - b.id);\n\nconst target = /^\\d+$/.test(arg)\n  ? rows[Number(arg) - 1]\n  : rows.find((r) => norm(r.url) === norm(arg));\n\nif (!target) {\n  return [{ json: { found: false, chatId, text: `Quelle „${arg}“ nicht gefunden. Siehe /list` } }];\n}\nreturn [{ json: { found: true, chatId, url: target.url, title: target.title || target.url } }];\n"
       }
     },
     {
@@ -350,7 +350,7 @@
         260
       ],
       "parameters": {
-        "jsCode": "const { chatId, url, title } = $('Resolve source').first().json;\nreturn [{ json: { chatId, text: `Удалено: ${title}\\n${url}` } }];\n"
+        "jsCode": "const { chatId, url, title } = $('Resolve source').first().json;\nreturn [{ json: { chatId, text: `Entfernt: ${title}\\n${url}` } }];\n"
       }
     },
     {
@@ -384,7 +384,7 @@
         500
       ],
       "parameters": {
-        "jsCode": "const { chatId } = $('Parse command').first().json;\nconst rows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.url)\n  .sort((a, b) => a.id - b.id);\n\nconst text = rows.length\n  ? ['Источники:', ...rows.map((r, i) => `${i + 1}. ${r.title || ''}\\n${r.url}`)].join('\\n')\n  : 'Источников пока нет. Добавьте: /add https://example.com/rss';\n\nreturn [{ json: { chatId, text } }];\n"
+        "jsCode": "const { chatId } = $('Parse command').first().json;\nconst rows = $input.all()\n  .map((i) => i.json)\n  .filter((r) => r.url)\n  .sort((a, b) => a.id - b.id);\n\nconst text = rows.length\n  ? ['Quellen:', ...rows.map((r, i) => `${i + 1}. ${r.title || ''}\\n${r.url}`)].join('\\n')\n  : 'Noch keine Quellen. Hinzufügen: /add https://example.com/rss';\n\nreturn [{ json: { chatId, text } }];\n"
       }
     },
     {

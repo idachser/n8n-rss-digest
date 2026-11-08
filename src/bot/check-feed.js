@@ -3,8 +3,8 @@ const items = $input.all().map((i) => i.json);
 const entries = items.filter((j) => j.title || j.link);
 
 if (entries.length === 0) {
-  const reason = items.find((j) => j.error)?.error || 'в ленте нет записей или это не RSS/Atom';
-  return [{ json: { ok: false, chatId, text: `Не удалось прочитать ленту ${url}\n${reason}` } }];
+  const reason = items.find((j) => j.error)?.error || 'der Feed hat keine Einträge oder ist kein RSS/Atom';
+  return [{ json: { ok: false, chatId, text: `Feed konnte nicht gelesen werden: ${url}\n${reason}` } }];
 }
 
 // The Code node sandbox has no global URL constructor.

@@ -5,7 +5,7 @@ const rows = $input.all()
   .sort((a, b) => a.id - b.id);
 
 const text = rows.length
-  ? ['Источники:', ...rows.map((r, i) => `${i + 1}. ${r.title || ''}\n${r.url}`)].join('\n')
-  : 'Источников пока нет. Добавьте: /add https://example.com/rss';
+  ? ['Quellen:', ...rows.map((r, i) => `${i + 1}. ${r.title || ''}\n${r.url}`)].join('\n')
+  : 'Noch keine Quellen. Hinzufügen: /add https://example.com/rss';
 
 return [{ json: { chatId, text } }];

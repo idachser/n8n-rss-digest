@@ -8,6 +8,6 @@ return [{
     chatId,
     url,
     duplicate,
-    text: duplicate ? `Этот источник уже в списке: ${url}` : '',
+    text: duplicate ? `Diese Quelle ist bereits in der Liste: ${url}` : '',
   },
 }];

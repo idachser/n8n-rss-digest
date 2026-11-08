@@ -1,6 +1,6 @@
 {
   "id": "rssDigestSetup01",
-  "name": "RSS Digest — создать таблицы (запустить 1 раз)",
+  "name": "RSS Digest — Tabellen anlegen (einmal ausführen)",
   "nodes": [
     {
       "id": "cd0068bb-edaf-542f-a116-a52d1f4b7d55",

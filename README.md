@@ -1,63 +1,85 @@
-# RSS-дайджест → Telegram (n8n)
+# RSS-Digest → Telegram (n8n)
 
-Пользователь управляет списком RSS/Atom-лент через Telegram-бота. Раз в день n8n собирает свежие публикации, LLM (Gemini или Claude) выбирает самое значимое и пишет короткую выжимку, а бот присылает её вам в личку или публикует в канал.
+Sie verwalten Ihre Liste von RSS/Atom-Feeds über einen Telegram-Bot. Einmal täglich sammelt n8n die neuen Beiträge, ein LLM (Gemini oder Claude) wählt das Wichtigste aus und fasst es kurz zusammen, und der Bot schickt den Digest in Ihren Privatchat oder veröffentlicht ihn in einem Kanal.
 
-## Что внутри
+## Inhalt
 
-| Файл | Что делает |
+| Datei | Funktion |
 |---|---|
-| `workflows/setup.json` | Создаёт Data Tables `rss_sources` и `rss_seen`. Запустить один раз вручную. |
-| `workflows/bot.json` | Бот: `/add <url>`, `/list`, `/remove <номер или url>`. Перед добавлением проверяет, что лента читается и что её ещё нет в списке. |
-| `workflows/digest.json` | Каждый день в 9:00: ленты → свежее за 26 ч → отсев уже обработанного → Gemini или Claude → пост в Telegram. |
+| `workflows/setup.json` | Legt die Data Tables `rss_sources` und `rss_seen` an. Einmal manuell ausführen. |
+| `workflows/bot.json` | Bot: `/add <url>`, `/list`, `/remove <Nummer oder URL>`. Vor dem Hinzufügen prüft er, ob der Feed lesbar ist und ob er schon in der Liste steht. |
+| `workflows/digest.json` | Täglich um 9:00: Feeds → Neues der letzten 26 Std. → bereits Verarbeitetes aussortieren → Gemini oder Claude → Beitrag in Telegram. |
 
-Как работает дайджест:
+So funktioniert der Digest:
 
-- Все ленты читаются за один проход. Сломанная лента не роняет запуск: её можно получить отдельным сообщением админу (`adminChatId`).
-- Все ссылки, которые уже были показаны модели (а не только опубликованные), хранятся в `rss_seen` 30 дней. Поэтому новость, которую сегодня отбросили, завтра не всплывёт снова как «свежая».
-- Лимиты: не больше 20 публикаций с одного источника и 150 всего на один запрос к модели.
-- Модель получает пронумерованный список и возвращает JSON (structured outputs): `id`, заголовок и выжимку. Ссылки и названия источников берутся из ленты, а не из ответа модели, поэтому выдуманных ссылок быть не может.
-- Пост собирается в Telegram-HTML с экранированием. Если текст длиннее лимита Telegram, он делится на несколько сообщений.
+- Alle Feeds werden in einem Durchlauf gelesen. Ein defekter Feed bricht den Lauf nicht ab; auf Wunsch kommt eine eigene Meldung an den Admin (`adminChatId`).
+- Alle Links, die dem Modell schon gezeigt wurden (nicht nur die veröffentlichten), bleiben 30 Tage in `rss_seen`. Eine heute aussortierte Meldung taucht morgen also nicht wieder als „neu“ auf.
+- Limits: höchstens 20 Beiträge pro Quelle und 150 insgesamt pro Anfrage an das Modell.
+- Das Modell bekommt eine nummerierte Liste und antwortet mit JSON (Structured Outputs): `id`, Überschrift und Zusammenfassung. Links und Quellennamen stammen aus dem Feed, nicht aus der Modellantwort, deshalb kann es keine erfundenen Links geben.
+- Der Beitrag wird als Telegram-HTML mit Escaping gebaut. Ist er länger als das Telegram-Limit, wird er auf mehrere Nachrichten aufgeteilt.
 
-## Установка
+## Installation
 
-1. **Бот.** Создайте бота у [@BotFather](https://t.me/BotFather) и сохраните токен. Напишите боту `/start`, иначе он не сможет вам писать. Для публикации в канал добавьте бота **администратором** канала.
-2. **Ваш Telegram user id** можно узнать у [@userinfobot](https://t.me/userinfobot). Бот будет слушать только этот id.
-3. **Публичный HTTPS.** Telegram Trigger работает через webhook, поэтому n8n должен быть доступен снаружи по HTTPS: свой домен с reverse proxy или туннель, например `cloudflared tunnel --url http://localhost:5678`. Адрес пропишите в `.env`:
-   ```sh
-   cp .env.example .env   # WEBHOOK_URL=https://…/
-   docker compose up -d
-   ```
-4. **Импорт:**
+1. **Bot.** Legen Sie bei [@BotFather](https://t.me/BotFather) einen Bot an und notieren Sie das Token. Schreiben Sie dem Bot `/start`, sonst kann er Ihnen nicht schreiben. Für die Veröffentlichung in einem Kanal fügen Sie den Bot dort als **Administrator** hinzu.
+2. **Ihre Telegram-User-ID** erfahren Sie bei [@userinfobot](https://t.me/userinfobot). Der Bot reagiert nur auf diese ID.
+3. **Start.** Lokal: `docker compose up -d`. Der Bot braucht eine öffentliche HTTPS-Adresse, sonst kann Telegram ihm keine Befehle zustellen. Auf dem Server liefert sie Caddy (siehe „Server“). Lokal können Sie `sh scripts/tunnel.sh` ausführen: Es startet einen Cloudflare Quick Tunnel und setzt `WEBHOOK_URL`. Die Tunnel-Adresse ändert sich bei jedem Neustart des Tunnels; danach das Skript erneut ausführen.
+4. **Import:**
    ```sh
    docker compose exec n8n n8n import:workflow --separate --input=/workflows
    ```
-   Или вручную через UI: *Workflows → Import from File*.
-5. **Credentials** (в UI n8n, *Credentials → Add*):
-   - **Telegram API**: токен бота. Выберите его в нодах `Telegram Trigger`, `Reply` и `Send to Telegram`.
-   - **Header Auth** для Gemini: Name `x-goog-api-key`, Value — ключ из [Google AI Studio](https://aistudio.google.com/apikey). Выберите его в ноде `Gemini`.
-   - **Header Auth** для Claude (если нужен): Name `x-api-key`, Value — ключ из [Claude Console](https://platform.claude.com/settings/keys). Выберите его в ноде `Claude`.
-   - Telegram-credential выберите также в ноде `Notify admin`.
-6. **Настройка:**
-   - `RSS Digest — бот`, нода `Telegram Trigger`: в *Restrict to User IDs* — ваш id (несколько id — через запятую).
-   - `RSS Digest — дайджест`, нода `Config`: `chatId` (ваш id для лички, `@канал` или `-100…`), `provider`, при желании `adminChatId`, `topN`, `lookbackHours` и т. д.
-   - Расписание меняется в ноде `Schedule` (cron, часовой пояс берётся из `TZ`).
-7. Один раз запустите `RSS Digest — создать таблицы`, затем **опубликуйте** (Publish) бота и дайджест.
-8. Напишите боту `/add https://meduza.io/rss/all`, затем `/list`. Дайджест можно запустить вручную кнопкой *Execute workflow*.
+   Oder manuell in der UI: *Workflows → Import from File*.
+5. **Credentials** (in der n8n-UI, *Credentials → Add*):
+   - **Telegram API**: Bot-Token. Wählen Sie es in den Nodes `Telegram Trigger`, `Reply`, `Send to Telegram` und `Notify admin` aus.
+   - **Header Auth** für Gemini: Name `x-goog-api-key`, Value = Schlüssel aus [Google AI Studio](https://aistudio.google.com/apikey). Im Node `Gemini` auswählen.
+   - **Header Auth** für Claude (falls benötigt): Name `x-api-key`, Value = Schlüssel aus der [Claude Console](https://platform.claude.com/settings/keys). Im Node `Claude` auswählen.
+6. **Einstellungen:**
+   - `RSS Digest — Bot zur Quellenverwaltung`, Node `Telegram Trigger`: unter *Restrict to User IDs* Ihre ID (mehrere IDs durch Komma getrennt).
+   - `RSS Digest — täglicher Digest`, Node `Config`: `chatId` (Ihre ID für den Privatchat, `@Kanal` oder `-100…`), `provider`, optional `adminChatId`, `topN`, `lookbackHours` usw.
+   - Der Zeitplan wird im Node `Schedule` geändert (Cron, die Zeitzone kommt aus `TZ`).
+7. Führen Sie einmal `RSS Digest — Tabellen anlegen` aus und **veröffentlichen** (Publish) Sie danach Bot und Digest.
+8. Schreiben Sie dem Bot `/add https://www.tagesschau.de/index~rss2.xml` und dann `/list`. Den Digest können Sie manuell mit *Execute workflow* starten.
 
-> Если вы обновили JSON и импортировали его повторно, опубликуйте workflow заново: опубликованная версия сама не обновляется.
+> Wenn Sie das JSON aktualisiert und erneut importiert haben, veröffentlichen Sie den Workflow neu: Die veröffentlichte Version aktualisiert sich nicht von selbst.
 
-## Модель
+## Modell
 
-Провайдер выбирается в `Config` полем `provider`:
+Der Anbieter wird in `Config` über das Feld `provider` gewählt:
 
-- `gemini` (по умолчанию): `geminiModel: 'gemini-3.6-flash'`, вызов `models.generateContent`. У Gemini API есть бесплатный тариф для моделей Flash; актуальные лимиты смотрите в AI Studio. На бесплатном тарифе Google может использовать запросы для улучшения своих продуктов.
-- `claude`: `claudeModel: 'claude-opus-5-5'` с `claudeEffort: 'medium'`, вызов Messages API. Включён `fallbacks: "default"`: если классификатор безопасности отклонит запрос, Anthropic повторит его на подходящей модели. Дешевле: `claude-sonnet-5-5` или `claude-haiku-5-5`.
+- `gemini` (Standard): `geminiModel: 'gemini-3.6-flash'`, Aufruf von `models.generateContent`. Die Gemini API hat einen kostenlosen Tarif für die Flash-Modelle; die aktuellen Limits stehen in AI Studio. Im kostenlosen Tarif darf Google die Anfragen zur Verbesserung seiner Produkte nutzen.
+- `claude`: `claudeModel: 'claude-opus-5-5'` mit `claudeEffort: 'medium'`, Aufruf der Messages API. `fallbacks: "default"` ist aktiv: Lehnt ein Sicherheitsklassifikator die Anfrage ab, wiederholt Anthropic sie auf einem passenden Modell. Günstiger: `claude-sonnet-5-5` oder `claude-haiku-5-5`.
 
-Оба провайдера получают одинаковый промпт и JSON-схему ответа, остальная часть workflow от выбора не зависит.
+Beide Anbieter bekommen denselben Prompt und dasselbe JSON-Schema; der Rest des Workflows hängt nicht von der Wahl ab.
 
-## Разработка
+## Server
 
-Код Code-нод лежит в `src/` отдельными файлами. JSON в `workflows/` собирается скриптом:
+Damit der Bot immer antwortet und der Digest auch bei ausgeschaltetem Rechner kommt, läuft n8n auf einem Server zusammen mit Caddy. Caddy holt sich das HTTPS-Zertifikat von Let's Encrypt selbst.
+
+1. **DNS.** Legen Sie beim Domain-Anbieter einen A-Record für eine Subdomain (z. B. `n8n`) mit der IP des Servers an. Das Blog auf der Hauptdomain ist davon nicht betroffen.
+2. **Server.** Installieren Sie Docker (`curl -fsSL https://get.docker.com | sh`) und öffnen Sie die Ports 80 und 443 (z. B. `ufw allow 80,443/tcp`).
+3. **Backup des lokalen n8n.** Auf Ihrem Rechner:
+   ```sh
+   sh scripts/backup.sh
+   ```
+   Das erzeugt `n8n_data.tgz`: Workflows, Credentials samt Verschlüsselungsschlüssel und die Tabellen mit den Feeds. Im Archiv liegen das Bot-Token und die API-Schlüssel; behandeln Sie es wie ein Passwort.
+4. **Auf den Server kopieren:**
+   ```sh
+   rsync -av --exclude .git --exclude .env ./ user@server:~/n8n-rss-digest/
+   ```
+5. **Auf dem Server:**
+   ```sh
+   cd ~/n8n-rss-digest
+   cp .env.example .env        # N8N_DOMAIN=n8n.ihredomain
+   sh scripts/restore.sh
+   docker compose -f docker-compose.yml -f docker-compose.server.yml up -d
+   ```
+6. Öffnen Sie `https://n8n.ihredomain` und melden Sie sich mit demselben Konto an. Veröffentlichen (**Publish**) Sie Bot und Digest. Beim Veröffentlichen des Bots teilt n8n Telegram die Webhook-Adresse selbst mit.
+7. **Stoppen Sie das lokale n8n** (`docker compose down`), sonst kann der Digest doppelt kommen. Löschen Sie `n8n_data.tgz` auf dem Server und lokal.
+
+Workflows auf dem Server aktualisieren: `git pull` oder `rsync`, dann `docker compose -f docker-compose.yml -f docker-compose.server.yml exec n8n n8n import:workflow --separate --input=/workflows`. Schließen Sie vor dem Import die Browser-Tabs mit diesen Workflows, starten Sie n8n nach dem Import neu und veröffentlichen Sie erneut. In der UI zugewiesene Credentials werden beim Import zurückgesetzt und müssen neu ausgewählt werden.
+
+## Entwicklung
+
+Der Code der Code-Nodes liegt als einzelne Dateien in `src/`. Das JSON in `workflows/` erzeugt ein Skript:
 
 ```sh
 node scripts/build.mjs
