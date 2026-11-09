@@ -31,7 +31,7 @@ So funktioniert der Digest:
 5. **Credentials** (in der n8n-UI, *Credentials → Add*):
    - **Telegram API**: Bot-Token. Wählen Sie es in den Nodes `Telegram Trigger`, `Reply`, `Send to Telegram` und `Notify admin` aus.
    - **Header Auth** für Gemini: Name `x-goog-api-key`, Value = Schlüssel aus [Google AI Studio](https://aistudio.google.com/apikey). Im Node `Gemini` auswählen.
-   - **Header Auth** für Claude (falls benötigt): Name `x-api-key`, Value = Schlüssel aus der [Claude Console](https://platform.claude.com/settings/keys). Im Node `Claude` auswählen.
+   - **Header Auth** für Claude (falls benötigt): Name `x-api-key`, Value = Schlüssel aus der [Claude Console](https://platform.claude.com/settings/keys). Im Node `Claude` ist standardmäßig keine Authentifizierung gesetzt, damit sich der Workflow ohne Anthropic-Credential veröffentlichen lässt. Stellen Sie dort *Authentication → Generic Credential Type → Header Auth* ein und wählen Sie das Credential aus.
 6. **Einstellungen:**
    - `RSS Digest — Bot zur Quellenverwaltung`, Node `Telegram Trigger`: unter *Restrict to User IDs* Ihre ID (mehrere IDs durch Komma getrennt).
    - `RSS Digest — täglicher Digest`, Node `Config`: `chatId` (Ihre ID für den Privatchat, `@Kanal` oder `-100…`), `provider`, optional `adminChatId`, `topN`, `lookbackHours` usw.

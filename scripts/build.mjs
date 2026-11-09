@@ -133,6 +133,8 @@ const telegramSend = (name, position, additionalFields, extra = {}) => ({
   ...extra,
 });
 
+// credential = null leaves the node without auth: n8n refuses to publish a workflow
+// that references a credential missing on the instance, even on a branch that never runs.
 const llmRequest = (name, position, url, headers, credential) => ({
   name,
   type: 'n8n-nodes-base.httpRequest',
@@ -141,8 +143,9 @@ const llmRequest = (name, position, url, headers, credential) => ({
   parameters: {
     method: 'POST',
     url,
-    authentication: 'genericCredentialType',
-    genericAuthType: 'httpHeaderAuth',
+    ...(credential
+      ? { authentication: 'genericCredentialType', genericAuthType: 'httpHeaderAuth' }
+      : { authentication: 'none' }),
     sendHeaders: headers.length > 0,
     headerParameters: { parameters: headers },
     sendBody: true,
@@ -150,7 +153,7 @@ const llmRequest = (name, position, url, headers, credential) => ({
     jsonBody: '={{ JSON.stringify($json.body) }}',
     options: { timeout: 600000 },
   },
-  credentials: { httpHeaderAuth: credential },
+  ...(credential ? { credentials: { httpHeaderAuth: credential } } : {}),
   retryOnFail: true,
   maxTries: 2,
   waitBetweenTries: 30000,
@@ -250,7 +253,7 @@ const digest = workflow('rssDigestDaily01', 'RSS Digest — täglicher Digest', 
   llmRequest('Claude', [2200, 200], 'https://api.anthropic.com/v1/messages', [
     { name: 'anthropic-version', value: '2026-10-21' },
     { name: 'anthropic-beta', value: 'server-side-fallback-2026-07-01' },
-  ], { id: 'anthropic-key', name: 'Anthropic API key' }),
+  ], null),
   llmRequest('Gemini', [2200, 400],
     "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiModel }}:generateContent",
     [], { id: 'gemini-key', name: 'Gemini API key' }),
