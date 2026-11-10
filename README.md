@@ -45,7 +45,7 @@ So funktioniert der Digest:
 
 Der Anbieter wird in `Config` über das Feld `provider` gewählt:
 
-- `gemini` (Standard): `geminiModel: 'gemini-3.6-flash'`, Aufruf von `models.generateContent`. Die Gemini API hat einen kostenlosen Tarif für die Flash-Modelle; die aktuellen Limits stehen in AI Studio. Im kostenlosen Tarif darf Google die Anfragen zur Verbesserung seiner Produkte nutzen.
+- `gemini` (Standard): `geminiModel: 'gemini-3.6-flash'`, Aufruf von `models.generateContent`. Die Gemini API hat einen kostenlosen Tarif für die Flash-Modelle; die aktuellen Limits stehen in AI Studio. Im kostenlosen Tarif darf Google die Anfragen zur Verbesserung seiner Produkte nutzen. Antwortet `geminiModel` nach 5 Versuchen nicht (z. B. 503 bei Überlastung), übernimmt der Node `Gemini fallback` mit `geminiFallbackModel` (`gemini-3.5-flash-lite`).
 - `claude`: `claudeModel: 'claude-opus-5-5'` mit `claudeEffort: 'medium'`, Aufruf der Messages API. `fallbacks: "default"` ist aktiv: Lehnt ein Sicherheitsklassifikator die Anfrage ab, wiederholt Anthropic sie auf einem passenden Modell. Günstiger: `claude-sonnet-5-5` oder `claude-haiku-5-5`.
 
 Beide Anbieter bekommen denselben Prompt und dasselbe JSON-Schema; der Rest des Workflows hängt nicht von der Wahl ab.

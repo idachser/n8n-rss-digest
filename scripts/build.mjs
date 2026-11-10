@@ -135,7 +135,7 @@ const telegramSend = (name, position, additionalFields, extra = {}) => ({
 
 // credential = null leaves the node without auth: n8n refuses to publish a workflow
 // that references a credential missing on the instance, even on a branch that never runs.
-const llmRequest = (name, position, url, headers, credential) => ({
+const llmRequest = (name, position, url, headers, credential, { timeout = 600000, ...extra } = {}) => ({
   name,
   type: 'n8n-nodes-base.httpRequest',
   typeVersion: 4.2,
@@ -150,13 +150,15 @@ const llmRequest = (name, position, url, headers, credential) => ({
     headerParameters: { parameters: headers },
     sendBody: true,
     specifyBody: 'json',
-    jsonBody: '={{ JSON.stringify($json.body) }}',
-    options: { timeout: 600000 },
+    jsonBody: "={{ JSON.stringify($('Build request').first().json.body) }}",
+    options: { timeout },
   },
   ...(credential ? { credentials: { httpHeaderAuth: credential } } : {}),
+  // n8n caps retries at 5 tries and 5 s between them, whatever is configured.
   retryOnFail: true,
-  maxTries: 2,
-  waitBetweenTries: 30000,
+  maxTries: 5,
+  waitBetweenTries: 5000,
+  ...extra,
 });
 
 const bot = workflow('rssDigestBot0001', 'RSS Digest — Bot zur Quellenverwaltung', [
@@ -253,10 +255,14 @@ const digest = workflow('rssDigestDaily01', 'RSS Digest — täglicher Digest', 
   llmRequest('Claude', [2200, 200], 'https://api.anthropic.com/v1/messages', [
     { name: 'anthropic-version', value: '2026-10-21' },
     { name: 'anthropic-beta', value: 'server-side-fallback-2026-07-01' },
-  ], null),
+  ], null, { maxTries: 2 }),
   llmRequest('Gemini', [2200, 400],
     "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiModel }}:generateContent",
-    [], { id: 'gemini-key', name: 'Gemini API key' }),
+    [], { id: 'gemini-key', name: 'Gemini API key' }, { timeout: 180000, onError: 'continueErrorOutput' }),
+  // Gemini answers 503 when a model is overloaded; a different model usually has capacity.
+  llmRequest('Gemini fallback', [2420, 520],
+    "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiFallbackModel }}:generateContent",
+    [], { id: 'gemini-key', name: 'Gemini API key' }, { timeout: 180000 }),
   code('Format posts', 'digest/format-posts.js', [2420, 300]),
   // No retry: n8n retries a node with all its items, which would repost already-sent parts.
   telegramSend('Send to Telegram', [2640, 300], { parse_mode: 'HTML' }),
@@ -286,7 +292,9 @@ const digest = workflow('rssDigestDaily01', 'RSS Digest — täglicher Digest', 
   ['Provider', 'Claude', 0],
   ['Provider', 'Gemini', 1],
   ['Claude', 'Format posts'],
-  ['Gemini', 'Format posts'],
+  ['Gemini', 'Format posts', 0],
+  ['Gemini', 'Gemini fallback', 1],
+  ['Gemini fallback', 'Format posts'],
   ['Format posts', 'Send to Telegram'],
   ['Send to Telegram', 'Mark seen'],
   ['Mark seen', 'Save seen links'],

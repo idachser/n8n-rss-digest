@@ -12,6 +12,8 @@ return [{
     // 'gemini' oder 'claude'
     provider: 'gemini',
     geminiModel: 'gemini-3.6-flash',
+    // Wird genutzt, wenn geminiModel nach allen Versuchen nicht antwortet (z. B. 503 bei Überlastung)
+    geminiFallbackModel: 'gemini-3.5-flash-lite',
     claudeModel: 'claude-opus-5-5',
     claudeEffort: 'medium',
     seenRetentionDays: 30,

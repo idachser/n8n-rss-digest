@@ -32,7 +32,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "return [{\n  json: {\n    // Ziel des Digests: Ihre Telegram-ID (Privatchat mit dem Bot), @Kanal oder -100... (Bot muss Kanal-Admin sein)\n    chatId: '135656943',\n    // Empfänger von Meldungen über defekte Feeds; '' = keine Meldungen\n    adminChatId: '',\n    digestTitle: 'Nachrichten-Digest',\n    lookbackHours: 26,\n    maxItemsPerSource: 20,\n    maxItemsTotal: 150,\n    topN: 10,\n    // 'gemini' oder 'claude'\n    provider: 'gemini',\n    geminiModel: 'gemini-3.6-flash',\n    claudeModel: 'claude-opus-5-5',\n    claudeEffort: 'medium',\n    seenRetentionDays: 30,\n  },\n}];\n"
+        "jsCode": "return [{\n  json: {\n    // Ziel des Digests: Ihre Telegram-ID (Privatchat mit dem Bot), @Kanal oder -100... (Bot muss Kanal-Admin sein)\n    chatId: '135656943',\n    // Empfänger von Meldungen über defekte Feeds; '' = keine Meldungen\n    adminChatId: '',\n    digestTitle: 'Nachrichten-Digest',\n    lookbackHours: 26,\n    maxItemsPerSource: 20,\n    maxItemsTotal: 150,\n    topN: 10,\n    // 'gemini' oder 'claude'\n    provider: 'gemini',\n    geminiModel: 'gemini-3.6-flash',\n    // Wird genutzt, wenn geminiModel nach allen Versuchen nicht antwortet (z. B. 503 bei Überlastung)\n    geminiFallbackModel: 'gemini-3.5-flash-lite',\n    claudeModel: 'claude-opus-5-5',\n    claudeEffort: 'medium',\n    seenRetentionDays: 30,\n  },\n}];\n"
       }
     },
     {
@@ -188,14 +188,14 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "jsonBody": "={{ JSON.stringify($('Build request').first().json.body) }}",
         "options": {
           "timeout": 600000
         }
       },
       "retryOnFail": true,
       "maxTries": 2,
-      "waitBetweenTries": 30000
+      "waitBetweenTries": 5000
     },
     {
       "id": "63239eef-eebb-5ec2-a0ff-dbb72f4947b0",
@@ -217,9 +217,9 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "jsonBody": "={{ JSON.stringify($('Build request').first().json.body) }}",
         "options": {
-          "timeout": 600000
+          "timeout": 180000
         }
       },
       "credentials": {
@@ -229,8 +229,44 @@
         }
       },
       "retryOnFail": true,
-      "maxTries": 2,
-      "waitBetweenTries": 30000
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "fefb6666-aec0-50b7-ac90-991c261a2e7b",
+      "name": "Gemini fallback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        520
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://generativelanguage.googleapis.com/v1beta/models/{{ $('Config').first().json.geminiFallbackModel }}:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": []
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Build request').first().json.body) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "gemini-key",
+          "name": "Gemini API key"
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000
     },
     {
       "id": "63c19c86-6a5b-5925-a58f-862dabaa3349",
@@ -525,6 +561,24 @@
       ]
     },
     "Gemini": {
+      "main": [
+        [
+          {
+            "node": "Format posts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini fallback": {
       "main": [
         [
           {
